@@ -22,7 +22,7 @@ namespace MetadataService.Elastic
         readonly Encoding Encoding;
         private readonly ILogger logger;
 
-        public ElasticMetadataStorage(string host = "localhost:9200", string indexName = "metadata", Encoding encoding = default, ILogger logger = null)
+        public ElasticMetadataStorage(string host = "localhost:9200", string indexName = "metadata", Encoding encoding = default, ILogger<ElasticMetadataStorage> logger = null)
         {
             this.host = host;
             IndexName = indexName;
@@ -49,6 +49,9 @@ namespace MetadataService.Elastic
                                 }),
                         _ => error
                     })
+            //after fallbacks map and handle the remaining errors as required
+            .MapError(error => HandleElasticError(error,logger))
+
             //if no errors just return success
             .Map(_ => new Success());
 
@@ -62,13 +65,8 @@ namespace MetadataService.Elastic
                     await HttpGet($"http://{host}/{IndexName}/_doc/{resourceId}")
                     .Match<Result<string, Error>>(
                         response => ParseSourceFromGetResponse(response.GetResponseStream().ReadToEnd()),
-                        error => error switch
-                        {
-                            HttpError => MapHttpError(resourceId, error as HttpError),
-                            //todo: for breaker?
-                            ConnectionError => error,
-                            Error => error
-                        });
+                        //todo: this could be moved to a maperror and use a common delegate with the push method
+                        error => HandleElasticError(error, logger));
             }
         }
 
@@ -134,17 +132,28 @@ namespace MetadataService.Elastic
             string.IsNullOrEmpty(resourceId) || string.IsNullOrEmpty(method) ?
             new Error("invalid resource or method") :
             $"http://{host}/{IndexName}/{method}/{HttpUtility.UrlEncode(resourceId)}";
-        
-        static private Error MapHttpError(string resourceId, HttpError error) => error.Response.StatusCode switch
+
+        private static Error HandleElasticError(Error error, ILogger logger) =>
+            error switch
+            {
+                HttpError => MapHttpError(error as HttpError),
+                ConnectionError connerror => HandleCriticalError(connerror, logger),
+                Error => error
+            };
+
+        private static Error HandleCriticalError(Error error, ILogger logger)
         {
-            HttpStatusCode.NotFound => new MetadataStorageErrors.ResourceNotFound(resourceId),
+            //todo: more info etc.
+            logger?.LogCritical($"Connection error while trying to connect to elastic search: {error.Message}");
+            return error;
+        }
+
+        static private Error MapHttpError(HttpError error) => error.Response.StatusCode switch
+        {
+            HttpStatusCode.NotFound => new MetadataStorageErrors.ResourceNotFound("not found"),
             HttpStatusCode.BadRequest => new MetadataStorageErrors.ParsingError(error.Message),
             _ => error
         };
-
-
-
-
     }
 }
 

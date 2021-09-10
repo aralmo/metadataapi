@@ -102,7 +102,8 @@ namespace MetadataService
                 new MetadataStorageErrors.ResourceNotFound(wex.Response?.GetResponseStream()?.ReadToEnd()),
 
             //any other kind of web exception as http error
-            WebException wex => new HttpError(wex.Response as HttpWebResponse),
+            WebException wex when wex.Response != null => new HttpError(wex.Response as HttpWebResponse),
+            WebException wex => new ConnectionError(wex.Message),
 
             //everything else
             Exception => new Error(ex.Message)

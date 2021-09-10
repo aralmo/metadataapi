@@ -9,6 +9,7 @@ namespace MetadataService
 {
     internal static class LogEvents
     {
-        public static EventId ElasticHttpRequest = new(100, "HTTP request to Elastic");
+        public static EventId ElasticConnectionError = new(100, "HTTP request to Elastic");
+        public static EventId ElasticHttpRequest = new(200, "HTTP request to Elastic");
     }
 }

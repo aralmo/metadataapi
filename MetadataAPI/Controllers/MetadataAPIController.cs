@@ -1,11 +1,13 @@
 ﻿using MetadataService;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
+using static MetadataService.HttpHelper;
 
 namespace MetadataAPI.Controllers
 {
@@ -14,10 +16,11 @@ namespace MetadataAPI.Controllers
     public class MetadataAPIController : ControllerBase
     {
         readonly IMetadataStorage storage;
+        private readonly ILogger<MetadataAPIController> logger;
 
-        public MetadataAPIController(IMetadataStorage storage)
+        public MetadataAPIController(IMetadataStorage storage, ILogger<MetadataAPIController> logger)
         {
-            this.storage = storage;
+            this.storage = storage;            
         }
 
         [HttpGet]
