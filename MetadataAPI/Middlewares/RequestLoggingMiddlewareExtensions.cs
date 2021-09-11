@@ -14,7 +14,7 @@ namespace MetadataAPI
 {
     public static class RequestLoggingMiddlewareExtensions
     {
-        public static void AddRequestLogMiddleware(this IApplicationBuilder app, Func<HttpContext, RequestLoggingMiddleware.LogOptions> options = null)
+        public static void AddRequestLogMiddleware(this IApplicationBuilder app, Func<HttpRequest, RequestLoggingMiddleware.LogOptions> options = null)
         {
             app.UseMiddleware<RequestLoggingMiddleware>(
                 //options defaults to logbasic data as trace.
@@ -32,10 +32,10 @@ namespace MetadataAPI
     {
         private readonly ILogger logger;
         private readonly RequestDelegate next;
-        private readonly Func<HttpContext, LogOptions> options;
+        private readonly Func<HttpRequest, LogOptions> options;
         private readonly RecyclableMemoryStreamManager streamManager;
 
-        public RequestLoggingMiddleware(RequestDelegate next, Func<HttpContext, LogOptions> options, ILogger<RequestLoggingMiddleware> logger = null)
+        public RequestLoggingMiddleware(RequestDelegate next, Func<HttpRequest, LogOptions> options, ILogger<RequestLoggingMiddleware> logger = null)
         {
             this.logger = logger;
             this.next = next;
@@ -46,12 +46,12 @@ namespace MetadataAPI
         public async Task InvokeAsync(HttpContext context)
         {
 
-            var toLog = options(context);
+            var toLog = options(context.Request);
 
             //Read request body if set to log
             string requestBody = string.Empty;
             Stream requestBodyStream = null;
-            if (IsSet(toLog, LogOptions.LogResponseBody) && context.Request?.Body != null)
+            if (IsSet(toLog, LogOptions.LogRequestBody) && context.Request?.Body != null)
             {
                 //clone and read the request body
                 requestBodyStream = streamManager.GetStream();
@@ -68,7 +68,6 @@ namespace MetadataAPI
             Stream originalResponseStream = context.Response.Body;
             if (IsSet(toLog, LogOptions.LogResponseBody) && context.Response?.Body != null)
             {
-                //capture the response stream
                 var responseBody = streamManager.GetStream();
                 context.Response.Body = responseBody;
             }
@@ -97,11 +96,8 @@ namespace MetadataAPI
 
                 if (IsSet(toLog, LogOptions.LogResponse) && context.Response != null)
                 {
-                    builder.Append("{StatusCode} {StatusText} ");
-                    arguments.AddRange(new object[] {
-                        (int) context.Response.StatusCode,
-                        context.Response.StatusCode.ToString()
-                    });
+                    builder.Append("{StatusCode} ");
+                    arguments.Add(context.Response.StatusCode);
                 }
 
                 if (IsSet(toLog, LogOptions.LogRequestBody) && context.Request?.Body != null)
