@@ -13,6 +13,10 @@ namespace MetadataService
 {
     public static class HttpHelper
     {
+
+        public record HttpError(HttpWebResponse Response) : Error($"{(int)Response.StatusCode} - {Response.StatusDescription}");
+        public record ConnectionError(string Message) : Error(Message, LogLevel.Critical);
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static AsyncResult<HttpWebResponse, Error> HttpGet(string url)
         {
@@ -40,21 +44,21 @@ namespace MetadataService
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static AsyncResult<HttpWebResponse, Error> HttpPost(string url, Action<Stream> bodyWritter = null, string contentType = "application/json", ILogger logger = null) =>
-            HttpBodyRequest("POST", url, bodyWritter, contentType,logger);
+        public static AsyncResult<HttpWebResponse, Error> HttpPost(string url, Action<Stream> bodyWritter = null, string contentType = "application/json") =>
+            HttpBodyRequest("POST", url, bodyWritter, contentType);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static AsyncResult<HttpWebResponse, Error> HttpPut(string url, Action<Stream> bodyWritter = null, string contentType = "application/json", ILogger logger = null) =>
-            HttpBodyRequest("PUT", url, bodyWritter, contentType,logger);
+        public static AsyncResult<HttpWebResponse, Error> HttpPut(string url, Action<Stream> bodyWritter = null, string contentType = "application/json") =>
+            HttpBodyRequest("PUT", url, bodyWritter, contentType);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static AsyncResult<HttpWebResponse, Error> HttpBodyRequest(string method, string url, Action<Stream> bodyWritter = null, string contentType = "application/json", ILogger logger = null)
+        private static AsyncResult<HttpWebResponse, Error> HttpBodyRequest(string method, string url, Action<Stream> bodyWritter = null, string contentType = "application/json")
         {
             return Go().Async();
 
             async Task<Result<HttpWebResponse, Error>> Go()
             {
-                HttpWebRequest request = null;
+                HttpWebRequest request;
                 try
                 {
                     request = HttpWebRequest.Create(url) as HttpWebRequest;
@@ -65,9 +69,7 @@ namespace MetadataService
 
                     var response = await request.GetResponseAsync() as HttpWebResponse;
 
-                    //todo: get body first to add it to the log
-                    //todo: decide on a log format etc.
-                    logger?.LogTrace(LogEvents.ElasticHttpRequest, $"{method.ToUpper()} {url} {contentType} {(int)response.StatusCode}", request);
+                    //todo: how would I trace requests to elastic? maybe do an observer to httphelper? not sure if it's gonna be inlined that way
 
                     return
                         (int)response.StatusCode / 100 == 2 ?
@@ -76,7 +78,6 @@ namespace MetadataService
                 }
                 catch (WebException ex)
                 {
-                    logger?.LogTrace(LogEvents.ElasticHttpRequest, $"{method.ToUpper()} {url} {contentType} {(int)(ex.Response as HttpWebResponse)?.StatusCode}", request);
                     return ex.MapToResult();
                 }
                 catch (Exception ex)
@@ -86,20 +87,17 @@ namespace MetadataService
             }
         }
 
-        public record HttpError(HttpWebResponse Response) : Error($"{(int)Response.StatusCode} - {Response.StatusDescription}");
-        public record ConnectionError(string Message) : Error(Message);
-
         static Error MapToResult(this Exception ex) => ex switch
         {
             //return bad requests as a parsing error type.
             WebException wex when wex.Status == WebExceptionStatus.ProtocolError &&
             (wex.Response as HttpWebResponse)?.StatusCode == HttpStatusCode.BadRequest =>
-                new MetadataStorageErrors.ParsingError(wex.Response?.GetResponseStream()?.ReadToEnd()),
+                new MetadataRepositoryErrors.ParsingError(wex.Response?.GetResponseStream()?.ReadToEnd()),
 
             //return not found as document not found
             WebException wex when wex.Status == WebExceptionStatus.ProtocolError &&
             (wex.Response as HttpWebResponse)?.StatusCode == HttpStatusCode.BadRequest =>
-                new MetadataStorageErrors.ResourceNotFound(wex.Response?.GetResponseStream()?.ReadToEnd()),
+                new MetadataRepositoryErrors.ResourceNotFound(wex.Response?.GetResponseStream()?.ReadToEnd()),
 
             //any other kind of web exception as http error
             WebException wex when wex.Response != null => new HttpError(wex.Response as HttpWebResponse),

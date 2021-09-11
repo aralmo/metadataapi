@@ -11,8 +11,14 @@ namespace MetadataService
     {
         public static string ReadToEnd(this Stream stream)
         {
-            using var reader = new StreamReader(stream);
+            var reader = new StreamReader(stream);
             return reader.ReadToEnd();
+        }
+
+        public async static Task<string> ReadToEndAsync(this Stream stream)
+        {
+            var reader = new StreamReader(stream);
+            return await reader.ReadToEndAsync();
         }
 
         public static void Write(this Stream stream, string content, Encoding encoding)

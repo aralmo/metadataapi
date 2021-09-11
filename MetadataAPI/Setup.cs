@@ -7,7 +7,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using MetadataAPI.Middlewares;
 
 namespace MetadataAPI
 {
@@ -15,14 +14,14 @@ namespace MetadataAPI
     {
         public static void SetupDependencies(this IServiceCollection services)
         {
-            services.AddTransient<IMetadataStorage, ElasticMetadataStorage>();
+            services.AddTransient<IMetadataRepository, ElasticMetadataStorage>();
             services.AddLogging(cfg => cfg.AddConsole().SetMinimumLevel(LogLevel.Trace));
         }
 
         public static void SetupMiddlewares(this IApplicationBuilder builder)
         {
             //todo: add trace logs for requests
-            builder.AddLoggingRequestContextMiddleware();
+            builder.AddRequestLogMiddleware(ctx => RequestLoggingMiddleware.LogOptions.AsInfo | RequestLoggingMiddleware.LogOptions.LogAll);
         }
     }
 }

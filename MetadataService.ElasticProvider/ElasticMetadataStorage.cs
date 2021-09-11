@@ -14,20 +14,18 @@ using static MetadataService.HttpHelper;
 
 namespace MetadataService.Elastic
 {
-    public class ElasticMetadataStorage : IMetadataStorage
+    public class ElasticMetadataStorage : IMetadataRepository
     {
         //todo: dependency injection
         readonly string IndexName;
         readonly string host;
         readonly Encoding Encoding;
-        private readonly ILogger logger;
 
-        public ElasticMetadataStorage(string host = "localhost:9200", string indexName = "metadata", Encoding encoding = default, ILogger<ElasticMetadataStorage> logger = null)
+        public ElasticMetadataStorage(string host = "localhost:9200", string indexName = "metadata", Encoding encoding = null)
         {
             this.host = host;
             IndexName = indexName;
-            Encoding = encoding;
-            this.logger = logger;
+            Encoding = encoding ?? Encoding.Default;
         }
 
         #region IMetadataStorage members
@@ -50,7 +48,7 @@ namespace MetadataService.Elastic
                         _ => error
                     })
             //after fallbacks map and handle the remaining errors as required
-            .MapError(error => HandleElasticError(error,logger))
+            .MapError(error => MapHttpErrors(error))
 
             //if no errors just return success
             .Map(_ => new Success());
@@ -66,7 +64,7 @@ namespace MetadataService.Elastic
                     .Match<Result<string, Error>>(
                         response => ParseSourceFromGetResponse(response.GetResponseStream().ReadToEnd()),
                         //todo: this could be moved to a maperror and use a common delegate with the push method
-                        error => HandleElasticError(error, logger));
+                        error => MapHttpErrors(error));
             }
         }
 
@@ -76,14 +74,14 @@ namespace MetadataService.Elastic
         private AsyncResult<HttpWebResponse, Error> UpdateResource(string resourceId, string field, JsonElement data) =>
             from body in BuildUpdateBody(field, data).Async()
             from url in GetResourceUrl(resourceId, "_update").Async()
-            from response in HttpPost(url, stream => stream.Write(body, Encoding), logger: logger)
+            from response in HttpPost(url, stream => stream.Write(body, Encoding))
             select response;
 
         //elastic _create post, no idempotent post will fail if document already exists
         private AsyncResult<HttpWebResponse, Error> CreateResource(string resourceId, string field, JsonElement data) =>
             from body in BuildCreateBody(field, data).Async()
             from url in GetResourceUrl(resourceId, "_create").Async()
-            from response in HttpPost(url, stream => stream.Write(body, Encoding), logger: logger)
+            from response in HttpPost(url, stream => stream.Write(body, Encoding))
             select response;
 
         static private Result<string, Error> ParseSourceFromGetResponse(string json)
@@ -100,13 +98,13 @@ namespace MetadataService.Elastic
             }
             catch (JsonException ex)
             {
-                return new MetadataStorageErrors.ParsingError($"Error parsing response: {ex.Message}");
+                return new MetadataRepositoryErrors.ParsingError($"Error parsing response: {ex.Message}");
             }
         }
 
-        //todo: important! build methods could be smarter, just a poc for now, but is not controlling parsing errors, like having semicolons inside the json or a string withouth _
         static Result<string, Error> BuildCreateBody(string field, JsonElement data)
         {
+            //todo: test all valuekinds and see how elastic behaves on formatting
             string value = data switch
             {
                 JsonElement e when e.ValueKind == JsonValueKind.String => $"\"{data}\"",
@@ -133,27 +131,13 @@ namespace MetadataService.Elastic
             new Error("invalid resource or method") :
             $"http://{host}/{IndexName}/{method}/{HttpUtility.UrlEncode(resourceId)}";
 
-        private static Error HandleElasticError(Error error, ILogger logger) =>
+        static private Error MapHttpErrors(Error error) => 
             error switch
             {
-                HttpError => MapHttpError(error as HttpError),
-                ConnectionError connerror => HandleCriticalError(connerror, logger),
-                Error => error
+                HttpError http when http.Response.StatusCode == HttpStatusCode.NotFound => new MetadataRepositoryErrors.ResourceNotFound("not found"),
+                HttpError http when http.Response.StatusCode == HttpStatusCode.BadRequest => new MetadataRepositoryErrors.ParsingError(error.Message),
+                _ => error
             };
-
-        private static Error HandleCriticalError(Error error, ILogger logger)
-        {
-            //todo: more info etc.
-            logger?.LogCritical($"Connection error while trying to connect to elastic search: {error.Message}");
-            return error;
-        }
-
-        static private Error MapHttpError(HttpError error) => error.Response.StatusCode switch
-        {
-            HttpStatusCode.NotFound => new MetadataStorageErrors.ResourceNotFound("not found"),
-            HttpStatusCode.BadRequest => new MetadataStorageErrors.ParsingError(error.Message),
-            _ => error
-        };
     }
 }
 

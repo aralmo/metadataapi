@@ -8,7 +8,7 @@ using DeFuncto;
 
 namespace MetadataService
 {
-    public interface IMetadataStorage
+    public interface IMetadataRepository
     {
         /// <summary>
         /// Add or modify a resource metadata field. This will also create the resource if it doesn't exists.
@@ -16,16 +16,18 @@ namespace MetadataService
         /// <param name="resourceId"></param>
         /// <param name="field"></param>
         /// <param name="data"></param>
+        /// <seealso cref="MetadataRepositoryErrors"/>
         /// <returns></returns>
         AsyncResult<Success, Error> Push(string resourceId, string field, JsonElement data);
+
+        /// <summary>
+        /// Gets a resource field
+        /// </summary>
+        /// <param name="resourceId"></param>
+        /// <param name="field"></param>
+        /// <seealso cref="MetadataRepositoryErrors"/>
+        /// <returns></returns>
         AsyncResult<string, Error> Get(string resourceId, string field);
-    }
-
-
-    public class MetadataStorageErrors
-    {
-        public record ResourceNotFound(string Message) : Error(Message);
-        public record ParsingError(string Message) : Error(Message);
     }
 }
 
