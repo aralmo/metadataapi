@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 namespace MetadataService
 {
 
-    public record Success;
     public record Error(string Message, LogLevel Level = LogLevel.Error);
 
 }

@@ -30,7 +30,7 @@ namespace MetadataService.Elastic
 
         #region IMetadataStorage members
 
-        public AsyncResult<Success, Error> Push(string resourceId, string field, JsonElement data) =>
+        public AsyncResult<Unit, Error> Push(string resourceId, string field, JsonElement data) =>
             UpdateResource(resourceId, field, data)
             //if there is a method not found on the resource, fallback to post    
             .BindError(error =>
@@ -51,7 +51,7 @@ namespace MetadataService.Elastic
             .MapError(error => MapHttpErrors(error))
 
             //if no errors just return success
-            .Map(_ => new Success());
+            .Map(_ => Unit.Default);
 
         public AsyncResult<string, Error> Get(string resourceId, string field)
         {

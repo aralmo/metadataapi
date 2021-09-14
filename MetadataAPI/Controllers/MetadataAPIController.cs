@@ -1,9 +1,12 @@
-﻿using MetadataService;
+﻿using DeFuncto;
+using MetadataService;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
+using static MetadataAPI.ResultTypes;
+using static MetadataService.MetadataRepositoryErrors;
 
 namespace MetadataAPI.Controllers
 {
@@ -21,38 +24,38 @@ namespace MetadataAPI.Controllers
         }
 
         [HttpGet]
+        [Produces("application/json")]
         [Route("{resourceId}/{field}")]
-        public async Task<EitherActionResult<ResultTypes.JsonString,Error>> Get(string resourceId, string field) =>
+        public async Task<EitherActionResult<JsonString,Error>> Get(string resourceId, string field) =>
             await repository
                 .Get(resourceId, field)
-                .Map(ok => new ResultTypes.JsonString(ok))
-                .MapError<Error>(err => err switch
-                {
-                    MetadataRepositoryErrors.ResourceNotFound => new ResultTypes.HttpNotFound(err.Message),
-                    MetadataRepositoryErrors.ParsingError => new ResultTypes.HttpBadRequest(err.Message),
-                    _ => err                    
-                }).Result();
+                .Map(ok => new JsonString(ok))
+                .MapError<Error>(err => 
+                    err switch
+                    {
+                        ResourceNotFound => new HttpNotFound(err.Message),
+                        _ => HandleExceptionErrors(logger, err)
+                    })
+                .Result();
+
 
         [HttpPost]
+        [Produces("text/plain")]
         [Route("{resourceId}/{field}")]
-        public async Task<IActionResult> Post(string resourceId, string field, [FromBody] JsonElement data) =>
+        public async Task<EitherActionResult<Unit, Error>> Post(string resourceId, string field, [FromBody] JsonElement data) =>
             await repository
                 .Push(resourceId, field, data)
-                .Map(_ => Ok())
                 .MapError(error =>
-                    HandleError(logger, error) switch
+                    error switch
                     {
-                        MetadataRepositoryErrors
-                                .ParsingError => StatusCode((int)HttpStatusCode.BadRequest, error.Message),
-                        _ => StatusCode((int)HttpStatusCode.InternalServerError, error.Message)
+                        ParsingError => new HttpInternalError("Error trying to parse response"),
+                        _ => HandleExceptionErrors(logger, error)
                     })
-                .Match(ok => (IActionResult)ok,
-                       error => (IActionResult)error);
+                .Result();
 
-        static Error HandleError(ILogger logger, Error e)
+        static Error HandleExceptionErrors(ILogger logger, Error e)
         {
             logger?.Log(e.Level, e.Message);
-            //todo: hide errors to the response?
             return e;
         }
     }

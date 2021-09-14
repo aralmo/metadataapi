@@ -18,7 +18,7 @@ namespace MetadataService
         /// <param name="data"></param>
         /// <seealso cref="MetadataRepositoryErrors"/>
         /// <returns></returns>
-        AsyncResult<Success, Error> Push(string resourceId, string field, JsonElement data);
+        AsyncResult<Unit, Error> Push(string resourceId, string field, JsonElement data);
 
         /// <summary>
         /// Gets a resource field
