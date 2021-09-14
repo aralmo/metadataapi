@@ -1,13 +1,9 @@
 ﻿using MetadataService;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
-using static MetadataService.HttpHelper;
 
 namespace MetadataAPI.Controllers
 {
@@ -26,21 +22,16 @@ namespace MetadataAPI.Controllers
 
         [HttpGet]
         [Route("{resourceId}/{field}")]
-        public async Task<IActionResult> Get(string resourceId, string field) =>
+        public async Task<EitherActionResult<ResultTypes.JsonString,Error>> Get(string resourceId, string field) =>
             await repository
                 .Get(resourceId, field)
-                .Map(metadata => Content(metadata, "application/json"))
-                .MapError(error =>
-                    HandleError(logger, error) switch
-                    {
-                        MetadataRepositoryErrors
-                            .ResourceNotFound => StatusCode((int)HttpStatusCode.NotFound, error.Message),
-                        _ => StatusCode((int)HttpStatusCode.InternalServerError, error.Message)
-                    })
-                //merge ok and error
-                .Match(ok => ok as IActionResult,
-                       error => error as IActionResult);
-
+                .Map(ok => new ResultTypes.JsonString(ok))
+                .MapError<Error>(err => err switch
+                {
+                    MetadataRepositoryErrors.ResourceNotFound => new ResultTypes.HttpNotFound(err.Message),
+                    MetadataRepositoryErrors.ParsingError => new ResultTypes.HttpBadRequest(err.Message),
+                    _ => err                    
+                }).Result();
 
         [HttpPost]
         [Route("{resourceId}/{field}")]

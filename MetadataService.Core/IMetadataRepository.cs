@@ -26,7 +26,7 @@ namespace MetadataService
         /// <param name="resourceId"></param>
         /// <param name="field"></param>
         /// <seealso cref="MetadataRepositoryErrors"/>
-        /// <returns></returns>
+        /// <returns>Json string</returns>
         AsyncResult<string, Error> Get(string resourceId, string field);
     }
 }

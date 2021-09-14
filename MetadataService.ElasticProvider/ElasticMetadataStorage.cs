@@ -131,7 +131,7 @@ namespace MetadataService.Elastic
             new Error("invalid resource or method") :
             $"http://{host}/{IndexName}/{method}/{HttpUtility.UrlEncode(resourceId)}";
 
-        static private Error MapHttpErrors(Error error) => 
+        static private Error MapHttpErrors(Error error) =>
             error switch
             {
                 HttpError http when http.Response.StatusCode == HttpStatusCode.NotFound => new MetadataRepositoryErrors.ResourceNotFound("not found"),
